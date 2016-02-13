@@ -21,9 +21,9 @@ static int getBlockNum(int fd)
     }
 }
 
-uint64_t FileSystemSim::getBitMap()
+int64_t FileSystemSim::getBitMap()
 {
-    uint64_t bitmap[8];
+    int64_t bitmap[8];
 
     disk.read_block(0, bitmap);
 
@@ -31,18 +31,21 @@ uint64_t FileSystemSim::getBitMap()
 
 }
 
-void FileSystemSim::setBitMap(uint64_t bm)
+void FileSystemSim::setBitMap(int64_t bm)
 {
-    uint64_t bitmap[8];
-
+    int64_t bitmap[8];
+    
+    for(int i = 1; i < 8; i++)
+        bitmap[i] = 0;
+    
     bitmap[0] = bm;
     disk.write_block(0, bitmap);
 }
 
-void FileSystemSim::setFileDes(int fd, uint32_t len, uint32_t blk1,
-                                uint32_t blk2, uint32_t blk3)
+void FileSystemSim::setFileDes(int fd, int32_t len, int32_t blk1,
+                                int32_t blk2, int32_t blk3)
 {
-    uint32_t fdBuffer[16];
+    int32_t fdBuffer[16];
     int fdLoc = (fd % 4) * 4; /* Gets relative position to block */
     int fdBlock = getBlockNum(fd); /* Returns block number */
     if (fdBlock == -1) {
@@ -59,12 +62,77 @@ void FileSystemSim::setFileDes(int fd, uint32_t len, uint32_t blk1,
     disk.write_block(fdBlock, fdBuffer);
 }
 
+void FileSystemSim::getFileDes(int fd, int32_t *len, int32_t *blk1,
+                                int32_t *blk2, int32_t *blk3)
+{
+    int32_t fdBuffer[16];
+    int fdLoc = (fd % 4) * 4;
+    int fdBlock = getBlockNum(fd);
+    if (fdBlock == -1) {
+        DEBUG("Invalid fd: " << fd);
+        return;
+    }
+    
+    /* read disk */
+    disk.read_block(fdBlock, fdBuffer);
+    *len = fdBuffer[fdLoc];
+    *blk1 = fdBuffer[fdLoc + 1];
+    *blk2 = fdBuffer[fdLoc + 2];
+    *blk3 = fdBuffer[fdLoc + 3];
+}
+
+void FileSystemSim::dumpOFT()
+{
+    cout << "-------OFT----------" << endl;
+    cout << "fd Index Len CurrPos Buffer" << endl;
+    for (int i = 0; i < 4; i++)
+    {
+        cout << i << "    "
+        << OFT[i].fdIndex << "   "
+        << OFT[i].fileLen << "     "
+        << OFT[i].currPos << "     ";
+        for (int j = 0; j < 64; j++) {
+            cout << static_cast<int16_t>(OFT[0].buffer[0]);
+        }
+        cout << endl;
+    }
+}
+
+void FileSystemSim::initOFT()
+{
+    for (int i = 0; i < 4; i++)
+    {
+        for(int j = 0;j < 64; j++)
+            OFT[i].buffer[j] = 0;
+        OFT[i].currPos = 0;
+        OFT[i].fdIndex = -1;
+        OFT[i].fileLen = 0;
+    }
+}
+
 FileSystemSim::FileSystemSim()
 {
     /* Set the bitmask - Bit 0-6 are taken by default */
     uint64_t bitmap = 0x7f;
     setBitMap(bitmap);
 
-    /* Set file descriptors - (1-24) */
+    /* Initalize file descriptors - (1-23) */
+    for (int i = 1; i < 24; i++) {
+        setFileDes(i, -1, -1, -1, -1);
+    }
+    
+    /* Initialize Directory Descriptor (0)*/
+    setFileDes(0, 0, -1, -1, -1);
+    
+    /* Initialize OFT */
+    initOFT();
+    /* Setting Directory to Descriptor 0 */
+    OFT[0].currPos = 0;
+    OFT[0].fdIndex = 0;
+    OFT[0].fileLen = 0;
+    
+    /* Debugging */
+    dumpOFT();
+    disk.dump_disk();
     
 }

@@ -63,15 +63,21 @@ public:
     
 private:
     /* Read */
-    int _readFile(int index, int len, char *printBuffer);
+    int _readFile(int index, int len, char *readBuffer);
     /* Read next byte and increments currPos, changes buffer if necessary */
     char _readByte(int index);
+    /* Write */
+    int _writeFile(int index, int len, char *writeBuffer);
+    /* write next byte and increments len, change buffer if necessary */
+    void _writeByte(int index, char byte);
     /* Change OFT buffer */
     int changeBuffer(int index, int diskNum);
     
     /* BitMap */
     int64_t getBitMap();
     void setBitMap(int64_t bm);
+    /* Returns open block and sets bitmap as taken */
+    int getOpenBlock();
     
     /* File Descriptors */
     int setFileDes(int num, int32_t len, int32_t blk1, int32_t blk2, int32_t blk3);
@@ -82,7 +88,7 @@ private:
     /* get FD number with file name, return -1 if file does not exist */
     int getFDDir(char *name);
     /* set filename in directory */
-    int setFDDir(char *name);
+    int setFDDir(char *name, int fd);
     
     /* OFT */
     void initOFT();

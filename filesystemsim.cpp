@@ -6,6 +6,7 @@ using namespace std;
 void FileSystemSim::dump()
 {
     disk.dump_disk();
+    dumpOFT();
 }
 
 FileSystemSim::FileSystemSim()
@@ -20,7 +21,7 @@ FileSystemSim::FileSystemSim()
     }
     
     /* Initialize Directory Descriptor (0)*/
-    setFileDes(0, 0, 0, 0, 0);
+    setFileDes(0, 0, -1, -1, -1);
     
     /* Initialize OFT */
     initOFT();
@@ -35,8 +36,6 @@ FileSystemSim::FileSystemSim()
     
 }
 
-
-
 int FileSystemSim::createFile(char *name)
 {
     if (strlen(name) > 3) {
@@ -45,17 +44,50 @@ int FileSystemSim::createFile(char *name)
         return -1;
     }
     
-    int fd;
+    if (getFDDir(name) != -1) {
+        cout << "error ";
+        DEBUG("File already exist: " << name);
+        return -1;
+    }
     
+    int fd;
     fd = getOpenFD();
     if (fd == -1) {
         cout << "error ";
         DEBUG("No more file descriptors");
         return -1;
     }
-    
     setFileDes(fd, 0, 0, 0, 0);
+    setFDDir(name, fd);
     
     return 0;
     
+}
+
+int FileSystemSim::seek(int index, int pos)
+{
+    if (pos < 0 || pos > 192) {
+        cout << "error ";
+        DEBUG("Seek position out of bounds\n");
+        return -1;
+    }
+    
+    if (pos > OFT[index].fileLen) {
+        cout << "error ";
+        DEBUG("Seek position greater than file len\n");
+        return -1;
+    }
+    
+    int currBlock = OFT[index].currPos / 64;
+    int nextBlock = pos / 64;
+    
+    if (currBlock == nextBlock) {
+        OFT[index].currPos = pos;
+        return 0;
+    }
+    
+    /* change buffer if not current disk */
+    changeBuffer(index, nextBlock);
+    OFT[index].currPos = pos;
+    return 0;
 }

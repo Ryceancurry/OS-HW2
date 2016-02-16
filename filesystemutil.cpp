@@ -44,6 +44,34 @@ void FileSystemSim::setBitMap(int64_t bm)
     disk.write_block(0, bitmap);
 }
 
+int FileSystemSim::getOpenBlock()
+{
+    int64_t bitmap = getBitMap();
+    int64_t tempBM = bitmap;
+    int block = -1;
+    int mask;
+
+    /* Finds bit */
+    for (int i = 0; i < 64; i++)
+    {
+        if (!(tempBM & 0x1)) {
+            block = i;
+            break;
+        }
+        tempBM = tempBM >> 1;
+    }
+    
+    if (block == -1)
+        return -1;
+    
+    /* Set bitmask */
+    mask = 0x1 << block;
+    bitmap = mask | bitmap;
+    setBitMap(bitmap);
+    
+    return block;
+}
+
 int FileSystemSim::setFileDes(int fd, int32_t len, int32_t blk1,
                                int32_t blk2, int32_t blk3)
 {
@@ -105,28 +133,6 @@ int FileSystemSim::getOpenFD()
     return -1;
 }
 
-int FileSystemSim::seek(int index, int pos)
-{
-    if (pos > 0 || pos > 192) {
-        cout << "error ";
-        DEBUG("Seek position out of bounds\n");
-        return -1;
-    }
-    
-    int currBlock = OFT[index].currPos / 64;
-    int nextBlock = pos / 64;
-    
-    if (currBlock == nextBlock) {
-        OFT[index].currPos = pos;
-        return 0;
-    }
-    
-    /* change buffer if not current disk */
-    changeBuffer(index, nextBlock);
-    OFT[index].currPos = pos;
-    return 0;
-}
-
 int FileSystemSim::changeBuffer(int index, int diskNum)
 {
     int32_t len, blk1, blk2, blk3;
@@ -135,26 +141,48 @@ int FileSystemSim::changeBuffer(int index, int diskNum)
         return -1;
     
     /* Write current buffer back to disk block */
-    disk.write_block(OFT[index].currBlock, OFT[index].buffer);
+    if (OFT[index].fileLen != 0)
+        disk.write_block(OFT[index].currBlock, OFT[index].buffer);
     /* Read new block to buffer */
     switch(diskNum){
         case 0:
             if (blk1 == -1) {
-                DEBUG("Block not inited\n");
+                DEBUG("Block not inited assigning block\n");
+                blk1 = getOpenBlock();
+                if (blk1 == -1) {
+                    cout << "error ";
+                    DEBUG("No more blocks available\n");
+                    return -1;
+                }
+                setFileDes(OFT[index].fdIndex, len, blk1, blk2, blk3);
             }
             disk.read_block(blk1, OFT[index].buffer);
             OFT[index].currBlock = blk1;
             break;
         case 1:
             if (blk2 == -1) {
-                DEBUG("Block not inited\n");
+                DEBUG("Block not inited assigning block\n");
+                blk2 = getOpenBlock();
+                if (blk2 == -1) {
+                    cout << "error ";
+                    DEBUG("No more blocks available\n");
+                    return -1;
+                }
+                setFileDes(OFT[index].fdIndex, len, blk1, blk2, blk3);
             }
             disk.read_block(blk2, OFT[index].buffer);
             OFT[index].currBlock = blk2;
             break;
         case 2:
             if (blk3 == -1) {
-                DEBUG("Block not inited\n");
+                DEBUG("Block not inited assigning block\n");
+                blk3 = getOpenBlock();
+                if (blk3 == -1) {
+                    cout << "error ";
+                    DEBUG("No more blocks available\n");
+                    return -1;
+                }
+                setFileDes(OFT[index].fdIndex, len, blk1, blk2, blk3);
             }
             disk.read_block(blk3, OFT[index].buffer);
             OFT[index].currBlock = blk3;
@@ -181,16 +209,15 @@ char FileSystemSim::_readByte(int index)
     return OFT[index].buffer[OFT[index].currPos - 1];
 }
 
-int FileSystemSim::_readFile(int index, int len, char *printBuffer)
+int FileSystemSim::_readFile(int index, int len, char *readBuffer)
 {
-    if (printBuffer == NULL) {
+    if (readBuffer == NULL) {
         DEBUG("Read buffer not initialized\n");
         return -1;
     }
-    
     if (OFT[index].fdIndex == -1) {
         cout << "error ";
-        DEBUG("File descriptor not open\n");
+        DEBUG("File descriptor not open: Read\n");
         return -1;
     }
     
@@ -199,16 +226,50 @@ int FileSystemSim::_readFile(int index, int len, char *printBuffer)
         /* End of file */
         if (OFT[index].fileLen == OFT[index].currPos)
             break;
-        printBuffer[readCount] = _readByte(index);
+        readBuffer[readCount] = _readByte(index);
         readCount++;
     }
-    
     return readCount;
+}
+
+void FileSystemSim::_writeByte(int index, char byte)
+{
+    if ((OFT[index].fileLen % 64) == 0)
+        changeBuffer(index, (OFT[index].fileLen / 64));
+    
+    OFT[index].buffer[OFT[index].fileLen] = byte;
+    OFT[index].fileLen++;
+}
+
+int FileSystemSim::_writeFile(int index, int len, char *writeBuffer)
+{
+    if (writeBuffer == NULL) {
+        DEBUG("Write buffer not initialized\n");
+        return -1;
+    }
+    if (OFT[index].fdIndex == -1) {
+        cout << "error ";
+        DEBUG("File descriptor not open: Write\n");
+        return -1;
+    }
+    
+    int writeCount = 0;
+    while(writeCount != len) {
+        /* End of file size */
+        if (OFT[index].fileLen > 191)
+            break;
+        _writeByte(index, writeBuffer[writeCount]);
+        writeCount++;
+    }
+    return writeCount;
 }
 
 int FileSystemSim::getFDDir(char *name)
 {
     char buf[4];
+    
+    /* reset currPos */
+    OFT[0].currPos = 0;
     
     /* read each file in the directory */
     for (int i = 0; i < (OFT[0].fileLen / 8); i++) {
@@ -216,6 +277,7 @@ int FileSystemSim::getFDDir(char *name)
             DEBUG("Did not read 4 bytes for FD name\n");
             return -1;
         }
+
         /* If found file return fd */
         if (strncmp(name, buf, 4) == 0) {
             if (_readFile(0, 4, buf) != 4) {
@@ -231,19 +293,32 @@ int FileSystemSim::getFDDir(char *name)
     return -1;
 }
 
+int FileSystemSim::setFDDir(char *name, int fd)
+{
+    char buf[8];
+    memcpy(buf, name, 4);
+    memcpy(buf + 4, &fd, 4);
+    
+    if(_writeFile(0, 8, buf) == -1)
+        return -1;
+    
+    return 0;
+}
+
 void FileSystemSim::dumpOFT()
 {
     cout << "-------OFT----------" << endl;
-    cout << "fd Index Len CurrPos currBlock Buffer" << endl;
+    cout << "fd Index Len CurrPos currBlock" << endl;
     for (int i = 0; i < 4; i++)
     {
         cout << i << "    "
         << OFT[i].fdIndex << "   "
         << OFT[i].fileLen << "     "
-        << OFT[i].currPos << "    "
-        << OFT[i].currBlock << "    ";
+        << OFT[i].currPos << "       "
+        << OFT[i].currBlock << endl;
+        cout << "buffer" << endl;
         for (int j = 0; j < 64; j++) {
-            cout << static_cast<int16_t>(OFT[0].buffer[0]);
+            cout << static_cast<int16_t>(OFT[i].buffer[j]) << " ";
         }
         cout << endl;
     }

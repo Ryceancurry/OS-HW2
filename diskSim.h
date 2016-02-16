@@ -59,6 +59,7 @@ public:
     
     void dump();
     int createFile(char *name);
+    int seek(int index, int pos);
     
 private:
     /* Read */
@@ -66,7 +67,7 @@ private:
     /* Read next byte and increments currPos, changes buffer if necessary */
     char _readByte(int index);
     /* Change OFT buffer */
-    int changeBuffer(int index, int disk);
+    int changeBuffer(int index, int diskNum);
     
     /* BitMap */
     int64_t getBitMap();

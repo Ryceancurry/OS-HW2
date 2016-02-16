@@ -105,17 +105,39 @@ int FileSystemSim::getOpenFD()
     return -1;
 }
 
-int FileSystemSim::changeBuffer(int index, int disk)
+int FileSystemSim::seek(int index, int pos)
+{
+    if (pos > 0 || pos > 192) {
+        cout << "error ";
+        DEBUG("Seek position out of bounds\n");
+        return -1;
+    }
+    
+    int currBlock = OFT[index].currPos / 64;
+    int nextBlock = pos / 64;
+    
+    if (currBlock == nextBlock) {
+        OFT[index].currPos = pos;
+        return 0;
+    }
+    
+    /* change buffer if not current disk */
+    changeBuffer(index, nextBlock);
+    OFT[index].currPos = pos;
+    return 0;
+}
+
+int FileSystemSim::changeBuffer(int index, int diskNum)
 {
     int32_t len, blk1, blk2, blk3;
     
-    if (getFileDes(OFT[index].fdIndex, len, blk1, blk2, blk3))
+    if (getFileDes(OFT[index].fdIndex, &len, &blk1, &blk2, &blk3))
         return -1;
     
     /* Write current buffer back to disk block */
     disk.write_block(OFT[index].currBlock, OFT[index].buffer);
     /* Read new block to buffer */
-    switch(disk){
+    switch(diskNum){
         case 0:
             if (blk1 == -1) {
                 DEBUG("Block not inited\n");
@@ -150,10 +172,13 @@ char FileSystemSim::_readByte(int index)
         DEBUG("PANIC!!\n");
         return -1;
     }
+    
     /* if we are at the beginning of each disk */
     if ((OFT[index].currPos % 64) == 0)
-        changeBuffer(index, (OFT[index].currPos / 64)
+        changeBuffer(index, (OFT[index].currPos / 64));
     
+    OFT[index].currPos++;
+    return OFT[index].buffer[OFT[index].currPos - 1];
 }
 
 int FileSystemSim::_readFile(int index, int len, char *printBuffer)
@@ -174,12 +199,36 @@ int FileSystemSim::_readFile(int index, int len, char *printBuffer)
         /* End of file */
         if (OFT[index].fileLen == OFT[index].currPos)
             break;
-        printBuffer[readCount] = OFT[index].buffer[currPos];
+        printBuffer[readCount] = _readByte(index);
         readCount++;
-        OFT[index].currPos++;
     }
     
     return readCount;
+}
+
+int FileSystemSim::getFDDir(char *name)
+{
+    char buf[4];
+    
+    /* read each file in the directory */
+    for (int i = 0; i < (OFT[0].fileLen / 8); i++) {
+        if (_readFile(0, 4, buf) != 4) {
+            DEBUG("Did not read 4 bytes for FD name\n");
+            return -1;
+        }
+        /* If found file return fd */
+        if (strncmp(name, buf, 4) == 0) {
+            if (_readFile(0, 4, buf) != 4) {
+                DEBUG("Did not read 4 bytes for FD int");
+                return -1;
+            }
+            return *(int *)buf;
+        }
+        seek(0, OFT[0].currPos + 4);
+    }
+    
+    /* file not found */
+    return -1;
 }
 
 void FileSystemSim::dumpOFT()

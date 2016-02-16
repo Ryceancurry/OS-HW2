@@ -12,7 +12,7 @@ FileSystemSim::FileSystemSim()
 {
     /* Set the bitmask - Bit 0-6 are taken by default */
     uint64_t bitmap = 0x7f;
-    setBitMap(bitmap);x
+    setBitMap(bitmap);
 
     /* Initalize file descriptors - (1-23) */
     for (int i = 1; i < 24; i++) {

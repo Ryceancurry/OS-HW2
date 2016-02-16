@@ -206,7 +206,7 @@ char FileSystemSim::_readByte(int index)
         changeBuffer(index, (OFT[index].currPos / 64));
     
     OFT[index].currPos++;
-    return OFT[index].buffer[OFT[index].currPos - 1];
+    return OFT[index].buffer[(OFT[index].currPos - 1) % 64];
 }
 
 int FileSystemSim::_readFile(int index, int len, char *readBuffer)
@@ -237,7 +237,7 @@ void FileSystemSim::_writeByte(int index, char byte)
     if ((OFT[index].fileLen % 64) == 0)
         changeBuffer(index, (OFT[index].fileLen / 64));
     
-    OFT[index].buffer[OFT[index].fileLen] = byte;
+    OFT[index].buffer[(OFT[index].fileLen % 64)] = byte;
     OFT[index].fileLen++;
 }
 

@@ -79,7 +79,7 @@ int FileSystemSim::seek(int index, int pos)
     }
     
     int currBlock = OFT[index].currPos / 64;
-    int nextBlock = pos / 64;
+    int nextBlock = (pos - 1) / 64;
     
     if (currBlock == nextBlock) {
         OFT[index].currPos = pos;

@@ -3,8 +3,10 @@
 
 #include <stdint.h>
 
+#define DEBUG_BUILD
+
 #ifdef DEBUG_BUILD
-# define DEBUG(x) do { std:cerr << x; } while (0)
+# define DEBUG(x) do { std::cerr << x; } while (0)
 #else
 # define DEBUG(x) do {} while (0)
 #endif
@@ -15,6 +17,7 @@
 
 struct OpenFileTable {
     int8_t buffer[64];
+    int currBlock; /* current block held */
     int currPos;
     int fdIndex;
     int fileLen;
@@ -54,15 +57,31 @@ class FileSystemSim
 public:
     FileSystemSim();
     
+    void dump();
+    int createFile(char *name);
+    
 private:
+    /* Read */
+    int _readFile(int index, int len, char *printBuffer);
+    /* Read next byte and increments currPos, changes buffer if necessary */
+    char _readByte(int index);
+    /* Change OFT buffer */
+    int changeBuffer(int index, int disk);
+    
     /* BitMap */
     int64_t getBitMap();
     void setBitMap(int64_t bm);
     
     /* File Descriptors */
-    void setFileDes(int num, int32_t len, int32_t blk1, int32_t blk2, int32_t blk3);
-    void getFileDes(int num, int32_t *len, int32_t *blk1, int32_t *blk2, int32_t *blk3);
+    int setFileDes(int num, int32_t len, int32_t blk1, int32_t blk2, int32_t blk3);
+    int getFileDes(int num, int32_t *len, int32_t *blk1, int32_t *blk2, int32_t *blk3);
     int getOpenFD();
+    
+    /* File Name */
+    /* get FD number with file name, return -1 if file does not exist */
+    int getFDDir(char *name);
+    /* set filename in directory */
+    int setFDDir(char *name);
     
     /* OFT */
     void initOFT();

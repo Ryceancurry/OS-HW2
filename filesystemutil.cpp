@@ -25,7 +25,7 @@ static int getBlockNum(int fd)
 
 int64_t FileSystemSim::getBitMap()
 {
-    int64_t bitmap[8];
+    uint64_t bitmap[8];
     
     disk.read_block(0, bitmap);
     
@@ -35,7 +35,7 @@ int64_t FileSystemSim::getBitMap()
 
 void FileSystemSim::setBitMap(int64_t bm)
 {
-    int64_t bitmap[8];
+    uint64_t bitmap[8];
     
     for(int i = 1; i < 8; i++)
         bitmap[i] = 0;
@@ -44,12 +44,26 @@ void FileSystemSim::setBitMap(int64_t bm)
     disk.write_block(0, bitmap);
 }
 
+void FileSystemSim::removeBlock(int num)
+{
+    if (num > 64 || num < 0) {
+        return;
+    }
+    
+    int64_t mask;
+    int64_t bitmap = getBitMap();
+    
+    mask = ~(0x1 << num);
+    bitmap = bitmap & mask;
+    setBitMap(bitmap);
+}
+
 int FileSystemSim::getOpenBlock()
 {
     int64_t bitmap = getBitMap();
     int64_t tempBM = bitmap;
     int block = -1;
-    int mask;
+    int64_t mask = 0x1;
 
     /* Finds bit */
     for (int i = 0; i < 64; i++)
@@ -65,7 +79,7 @@ int FileSystemSim::getOpenBlock()
         return -1;
     
     /* Set bitmask */
-    mask = 0x1 << block;
+    mask = mask << block;
     bitmap = mask | bitmap;
     setBitMap(bitmap);
     
@@ -188,7 +202,7 @@ int FileSystemSim::changeBuffer(int index, int diskNum)
             OFT[index].currBlock = blk3;
             break;
         default:
-            DEBUG("WHYY(Unable to change buffers\n");
+            DEBUG("WHYY(Unable to change buffers" << diskNum << endl);
             return -1;
     }
     return 0;
@@ -234,11 +248,14 @@ int FileSystemSim::_readFile(int index, int len, char *readBuffer)
 
 void FileSystemSim::_writeByte(int index, char byte)
 {
-    if ((OFT[index].fileLen % 64) == 0)
-        changeBuffer(index, (OFT[index].fileLen / 64));
+    if ((OFT[index].currPos % 64) == 0) {
+        changeBuffer(index, (OFT[index].currPos / 64));
+    }
     
-    OFT[index].buffer[(OFT[index].fileLen % 64)] = byte;
-    OFT[index].fileLen++;
+    OFT[index].buffer[(OFT[index].currPos % 64)] = byte;
+    if (OFT[index].fileLen == OFT[index].currPos)
+        OFT[index].fileLen++;
+    OFT[index].currPos++;
 }
 
 int FileSystemSim::_writeFile(int index, int len, char *writeBuffer)
@@ -256,18 +273,23 @@ int FileSystemSim::_writeFile(int index, int len, char *writeBuffer)
     int writeCount = 0;
     while(writeCount != len) {
         /* End of file size */
-        if (OFT[index].fileLen > 191)
+        if (OFT[index].currPos >= 192) {
+            DEBUG("Wrote passed end of file\n");
             break;
+        }
         _writeByte(index, writeBuffer[writeCount]);
         writeCount++;
     }
     return writeCount;
 }
 
-int FileSystemSim::getFDDir(char *name)
+int FileSystemSim::getFDDir(char *name, int removeFlag)
 {
     char buf[4];
-    
+    char delBuf[8];
+    for (int i = 0; i < 8; i++) {
+        delBuf[i] = '\0';
+    }
     /* reset currPos */
     OFT[0].currPos = 0;
     
@@ -284,6 +306,10 @@ int FileSystemSim::getFDDir(char *name)
                 DEBUG("Did not read 4 bytes for FD int");
                 return -1;
             }
+            if (removeFlag) {
+                seek(0, OFT[0].currPos - 8);
+                _writeFile(0, 8, delBuf);
+            }
             return *(int *)buf;
         }
         seek(0, OFT[0].currPos + 4);
@@ -295,11 +321,24 @@ int FileSystemSim::getFDDir(char *name)
 
 int FileSystemSim::setFDDir(char *name, int fd)
 {
-    char buf[8];
+    char buf[8], rbuf[4];
     memcpy(buf, name, 4);
     memcpy(buf + 4, &fd, 4);
     
-    if(_writeFile(0, 8, buf) == -1)
+    OFT[0].currPos = 0;
+    
+    while (OFT[0].currPos < OFT[0].fileLen) {
+        _readFile(0, 4, rbuf);
+        
+        /* If slot is open take this slot */
+        if (rbuf[0] == 0) {
+            seek(0, OFT[0].currPos - 4);
+            break;
+        }
+        seek(0, OFT[0].currPos + 4);
+    }
+    
+    if (_writeFile(0, 8, buf) == -1)
         return -1;
     
     return 0;

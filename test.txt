@@ -1,0 +1,37 @@
+cr aa
+cr bb
+cr cc
+cr dd
+cr ee
+cr ff
+cr gg
+cr hh
+cr ii
+op aa
+op bb
+op cc
+wr 1 c 192
+wr 2 c 168
+wr 3 c 154
+cl 1
+cl 2
+cl 3
+op dd
+op ee
+op ff
+wr 1 c 192
+wr 2 c 134
+wr 3 c 146
+cl 1
+cl 2
+cl 3
+op gg
+op hh
+op ii
+wr 1 c 200
+wr 2 c 234
+wr 3 c 500
+cl 1
+cl 2
+cl 3
+sv hi.txt

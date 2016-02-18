@@ -23,6 +23,7 @@ void LDisk::write_block(int i, void *p)
 
 void LDisk::dump_disk()
 {
+    printf("bitmap:%x%x\n", ldisk[0][0], ldisk[0][1]);
     for (int i = 0; i < LDISK_SIZE; i++) {
         cout << "Block " << i << "     ";
         for (int j = 0; j < BLOCK_SIZE; j++) {

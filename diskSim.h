@@ -60,6 +60,15 @@ public:
     void dump();
     int createFile(char *name);
     int seek(int index, int pos);
+    int open(char *name);
+    int close(int index);
+    int read(int index, int len);
+    int write(int index, char byte, int len);
+    int del(char *name);
+    
+    int printFiles();
+    int save(char *name);
+    int load(char *name);
     
 private:
     /* Read */
@@ -78,6 +87,7 @@ private:
     void setBitMap(int64_t bm);
     /* Returns open block and sets bitmap as taken */
     int getOpenBlock();
+    void removeBlock(int num);
     
     /* File Descriptors */
     int setFileDes(int num, int32_t len, int32_t blk1, int32_t blk2, int32_t blk3);
@@ -85,8 +95,8 @@ private:
     int getOpenFD();
     
     /* File Name */
-    /* get FD number with file name, return -1 if file does not exist */
-    int getFDDir(char *name);
+    /* get FD number with file name, return -1 if file does not exist, remove from directory if flag is set */
+    int getFDDir(char *name, int removeFlag);
     /* set filename in directory */
     int setFDDir(char *name, int fd);
     
